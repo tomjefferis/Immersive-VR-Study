@@ -1,0 +1,11 @@
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import mne
+
+
+raw = mne.io.read_raw_bdf("alan1.bdf")
+
+eeg_channels = mne.pick_types(raw.info, eeg=True, exclude=raw.info['bads'])
+raw.plot(duration=60, order=eeg_channels, n_channels=len(eeg_channels),
+         remove_dc=False)
