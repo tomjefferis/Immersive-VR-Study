@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from scipy import signal
+from mne_icalabel import label_components
+
 #load data
 data = pd.read_csv('EEGCh1_D3357722440D_13.47.33_250.csv')
 
