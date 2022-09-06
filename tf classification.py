@@ -1,11 +1,17 @@
 import os
-import pandas as pd
-import mne
 from keras_preprocessing.sequence import pad_sequences
+from datetime import datetime
 import tensorflow as tf
-from classifier_gen import EEGNet_seq
+from keras.layers import LSTM, Dense
+from matplotlib import animation
 from sklearn.model_selection import train_test_split
+from tensorflow import keras
+from tensorflow.keras import layers
+import mne
 import numpy as np
+from sklearn import preprocessing
+from classifier_gen import EEGNet_seq
+
 #load data from ../EEG folder, all csv files
 def get_data():
     data = []
@@ -19,6 +25,7 @@ def get_data():
             #if raw is less than 150000, pad with zeros
             if raw.shape[1] < 150000:
                 raw = pad_sequences(raw, maxlen=150000, dtype='float32', padding='post', truncating='post', value=0)
+            raw = np.reshape(raw, (32, 150000,1))
             data.append(raw)
             #get scores from file names, 1 = watching, 2 = normal, 3 = hard
             if "watching" in file or "watch" in file:
@@ -35,25 +42,23 @@ def get_data():
 
 #for each data file, get the first 150000 samples
 #datas = [x[:, 0:150000] for x in data]
-chan, samples = data[0].shape
+chan, samples, ls = data[0].shape
 length = len(data)
 #reshape data to be 3d
-data = np.reshape(data, (30, 31, 150000,1))
+data = np.reshape(data, (30, 32, 150000,1))
 #sklearn test train split
-X_train, X_test, y_train, y_test = train_test_split(data, np.asarray(scores), test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(data, np.array(scores), test_size=0.2, random_state=42)
 
-#train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-#test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
 
 
-BATCH_SIZE = 10
+BATCH_SIZE = 5
 SHUFFLE_BUFFER_SIZE = 100
 
-#train_dataset = train_dataset.batch(BATCH_SIZE)
-#test_dataset = test_dataset.batch(BATCH_SIZE)
-#get data chan and samples
+train_dataset = train_dataset.shuffle(SHUFFLE_BUFFER_SIZE).batch(BATCH_SIZE)
+test_dataset = test_dataset.batch(BATCH_SIZE)
 
-
-model = EEGNet_seq(3,chan,samples)
-model.fit(X_train,y_train, epochs=1000,batch_size=10)
-model.evaluate(X_test,y_test)
+#model using EEGnet sequential model
+model = EEGNet_seq(3,32,150000)
+model.fit(train_dataset, epochs=100, validation_data=test_dataset)
