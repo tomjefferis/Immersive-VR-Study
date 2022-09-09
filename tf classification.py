@@ -47,7 +47,7 @@ length = len(data)
 #reshape data to be 3d
 data = np.reshape(data, (30, 32, 150000,1))
 #sklearn test train split
-X_train, X_test, y_train, y_test = train_test_split(data, np.array(scores), test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(data, np.reshape(scores,), test_size=0.2, random_state=42)
 
 train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
 test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))

@@ -1,7 +1,10 @@
 import os
+
+import mne_icalabel
 import numpy as np
 import mne
 from mne.preprocessing import ICA
+from mne.viz import plot_ica_components
 from mne_icalabel import label_components
 from pyprep import PrepPipeline
 import multiprocessing
@@ -28,7 +31,9 @@ def preprocessing(filepath):
     raw = raw.filter(1, 60.)
     ica = ICA(n_components=31, max_iter=50000, random_state=69, method='infomax')
     ica.fit(raw)
+    ica.plot_components()
     dicts = label_components(raw, ica, method='iclabel')
+    topo = plot_ica_components(ica)
     prob = dicts['y_pred_proba']
     labels = dicts['labels']
     # remove comonents labled eye or muscle with prob over 0.8
@@ -42,17 +47,17 @@ def preprocessing(filepath):
     raw.save('../EEG/' + filepath[6:-4] + '.fif', overwrite=True)
     #raw.save('../EEG/' + file[:-4] + '.fif', overwrite=True)
 
-if __name__ == '__main__':
-    pool = multiprocessing.Pool()
-    filenames = []
-    for file in os.listdir("../EEG/"):
-        if file.endswith(".bdf"):
-            filepath = "../EEG/" + file
-            filenames.append(filepath)
+#if __name__ == '__main__':
+#    pool = multiprocessing.Pool()
+filenames = []
+for file in os.listdir("../EEG/"):
+    if file.endswith(".bdf"):
+        filepath = "../EEG/" + file
+        filenames.append(filepath)
             #x = raw.get_data()
             #np.savetxt('../EEG/' + file[:-4] + '.csv', x, delimiter=',')
 
-    result = pool.map(preprocessing, filenames)
-    #for file in filenames:
-        #preprocessing(file)
+    #result = pool.map(preprocessing, filenames)
+for file in filenames:
+    preprocessing(file)
 
