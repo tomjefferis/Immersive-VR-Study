@@ -10,10 +10,16 @@ from pyprep import PrepPipeline
 import multiprocessing
 
 
+
 def preprocessing(filepath):
     raw = mne.io.read_raw_bdf(filepath)
     raw.load_data()
     montage = mne.channels.make_standard_montage('biosemi32')
+    # if first channel A1 then rename
+    if raw.ch_names[0] == 'A1':
+        old_chans = raw.ch_names
+        new_chans = ['Fp1', 'AF3', 'F7', 'F3', 'FC1', 'FC5', 'T7', 'C3', 'CP1', 'CP5', 'P7', 'P3', 'Pz', 'PO3', 'O1', 'Oz', 'O2', 'Po4', 'P4', 'P8', 'CP6', 'CP2', 'C4', 'T8', 'FC6', 'FC2', 'F4', 'F8', 'AF4', 'Fp2', 'Fz', 'Cz', 'A1', 'A2', 'LEOG', 'REOG', 'UEOG', 'DEOG', 'EXG7', 'EXG8', 'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet', 'Temp', 'Status']
+        raw.rename_channels(dict(zip(old_chans, new_chans)))
     raw.drop_channels(
         ch_names=["LEOG", "REOG", "A1", "A2", "EXG7", "EXG8", 'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet',
                   'Temp', 'Status', 'UEOG', 'DEOG'])
