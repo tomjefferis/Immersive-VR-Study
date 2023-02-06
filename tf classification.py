@@ -1,32 +1,21 @@
 import os
-from keras_preprocessing.sequence import pad_sequences
-from datetime import datetime
 import tensorflow as tf
-from keras.layers import LSTM, Dense
-from matplotlib import animation
 from sklearn.model_selection import train_test_split
-from tensorflow import keras
-from tensorflow.keras import layers
-import mne
 import numpy as np
 from sklearn import preprocessing
-from classifier_gen import EEGNet_seq
+import scipy.io
 
 #load data from ../EEG folder, all csv files
 def get_data():
     data = []
     scores = []
-    for file in os.listdir("../EEG/"):
-        if file.endswith(".fif") and not file.endswith("resting.fif"):
-            filepath = "../EEG/" + file
+    for file in os.listdir("../FreqData/"):
+        if file.endswith(".mat") and not file.endswith("resting.mat") and not file.endswith("hard.mat"):
+            filepath = "../FreqData/" + file
             print(file)
-            raw = mne.io.read_raw_fif(filepath).load_data().get_data()
-            raw = raw[:,0:150000]
-            #if raw is less than 150000, pad with zeros
-            if raw.shape[1] < 150000:
-                raw = pad_sequences(raw, maxlen=150000, dtype='float32', padding='post', truncating='post', value=0)
-            raw = np.reshape(raw, (32, 150000,1))
-            data.append(raw)
+            #load mat file
+            raw = scipy.io.loadmat(filepath)
+            data.append(raw['temp'])
             #get scores from file names, 1 = watching, 2 = normal, 3 = hard
             if "watching" in file or "watch" in file:
                 scores.append(1)
@@ -39,26 +28,105 @@ def get_data():
 
 
 [data,scores] = get_data()
+def flatten(l):
+    return [item for sublist in l for item in sublist]
 
-#for each data file, get the first 150000 samples
-#datas = [x[:, 0:150000] for x in data]
-chan, samples, ls = data[0].shape
-length = len(data)
-#reshape data to be 3d
-data = np.reshape(data, (30, 32, 150000,1))
-#sklearn test train split
-X_train, X_test, y_train, y_test = train_test_split(data, np.reshape(scores,), test_size=0.2, random_state=42)
+def split_timeseries(series, window_size=1000, overlap=100):
+    segments = []
+    for i in range(0, series.shape[-1] - window_size + 1, window_size - overlap):
+        segment = series[..., i:i + window_size]
+        segments.append(segment)
+    return segments
 
-train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+#split data into 300 sample sliding window with 100 sample overlap
+def split_data(data, scores):
+    X = []
+    Y = []
+    for i in range(len(data)):
+        x = split_timeseries(data[i])
+        X.append(x)
+        y = np.full((len(x),1), scores[i])
+        Y.append(y)
+    return flatten(X), flatten(Y)
 
 
-BATCH_SIZE = 5
-SHUFFLE_BUFFER_SIZE = 100
+X, Y = split_data(data, scores)
 
-train_dataset = train_dataset.shuffle(SHUFFLE_BUFFER_SIZE).batch(BATCH_SIZE)
-test_dataset = test_dataset.batch(BATCH_SIZE)
+def normalize(X):
+    mean = np.mean(X, axis=2)
+    std = np.std(X, axis=2)
+    X = (X - mean[None, :, :, None]) / std[None, :, :, None]
+    return X
 
-#model using EEGnet sequential model
-model = EEGNet_seq(3,32,150000)
-model.fit(train_dataset, epochs=100, validation_data=test_dataset)
+#normalize data
+for i in range(len(X)):
+    X[i] = normalize(X[i])
+
+#reshape data
+length = len(X)
+X = np.array(X)
+X = X.reshape(length, 32, 31, 1000)
+Y = np.array(Y)
+#split data into train and test
+
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
+
+n_classes = 2
+
+# Define the input layer
+inputs = tf.keras.layers.Input(shape=(32, 31, 1000))
+
+# Add 2D Convolutional layer
+conv2d_1 = tf.keras.layers.Conv2D(filters=64, kernel_size=(32, 1), strides=(1, 1), activation='relu')(inputs)
+
+# Add another 2D Convolutional layer
+conv2d_2 = tf.keras.layers.Conv2D(filters=32, kernel_size=(1, 20), strides=(1, 1), activation='relu')(conv2d_1)
+
+# Add 2D Max Pooling layer
+max_pool = tf.keras.layers.MaxPool2D(pool_size=(1, 1), strides=(1, 1))(conv2d_2)
+
+# Flatten the output of the 2D Max Pooling layer
+flatten = tf.keras.layers.Flatten()(max_pool)
+
+# Add a fully connected layer with ReLU activation
+fc = tf.keras.layers.Dense(units=128, activation='relu')(flatten)
+
+# Add the final output layer with softmax activation
+outputs = tf.keras.layers.Dense(units=n_classes, activation='softmax')(fc)
+
+# Define the model
+model = tf.keras.models.Model(inputs=inputs, outputs=outputs)
+
+# Compile the model
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+# Fit the model
+model.fit(X_train, Y_train, epochs=500, batch_size=64)
+
+# Evaluate the model
+model.evaluate(X_test, Y_test)
+
+# Save the model
+model.save('model.h5')
+
+#plot confusion matrix and accuracy
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import accuracy_score
+
+Y_pred = model.predict(X_test)
+Y_pred_classes = np.argmax(Y_pred, axis=1)
+Y_true = Y_test
+confusion_mtx = confusion_matrix(Y_true, Y_pred_classes)
+f, ax = plt.subplots(figsize=(8, 8))
+sns.heatmap(confusion_mtx, annot=True, linewidths=0.01, cmap="Greens", linecolor="gray", fmt= '.1f', ax=ax)
+plt.xlabel("Predicted Label")
+plt.ylabel("True Label")
+plt.title("Confusion Matrix")
+plt.show()
+
+print("Accuracy: ", accuracy_score(Y_true, Y_pred_classes))
+
+
+

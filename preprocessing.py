@@ -18,11 +18,15 @@ def preprocessing(filepath):
     # if first channel A1 then rename
     if raw.ch_names[0] == 'A1':
         old_chans = raw.ch_names
-        new_chans = ['Fp1', 'AF3', 'F7', 'F3', 'FC1', 'FC5', 'T7', 'C3', 'CP1', 'CP5', 'P7', 'P3', 'Pz', 'PO3', 'O1', 'Oz', 'O2', 'Po4', 'P4', 'P8', 'CP6', 'CP2', 'C4', 'T8', 'FC6', 'FC2', 'F4', 'F8', 'AF4', 'Fp2', 'Fz', 'Cz', 'A1', 'A2', 'LEOG', 'REOG', 'UEOG', 'DEOG', 'EXG7', 'EXG8', 'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet', 'Temp', 'Status']
+        new_chans = ['Fp1', 'AF3', 'F7', 'F3', 'FC1', 'FC5', 'T7', 'C3', 'CP1', 'CP5', 'P7', 'P3', 'Pz', 'PO3', 'O1', 'Oz', 'O2', 'Po4', 'P4', 'P8', 'CP6', 'CP2', 'C4', 'T8', 'FC6', 'FC2', 'F4', 'F8', 'AF4', 'Fp2', 'Fz', 'Cz', 'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet', 'Temp', 'Status']
         raw.rename_channels(dict(zip(old_chans, new_chans)))
-    raw.drop_channels(
-        ch_names=["LEOG", "REOG", "A1", "A2", "EXG7", "EXG8", 'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet',
-                  'Temp', 'Status', 'UEOG', 'DEOG'])
+        raw.drop_channels(
+            ch_names=['GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet',
+                      'Temp', 'Status'])
+    else:
+        raw.drop_channels(
+            ch_names=["LEOG", "REOG", "A1", "A2", "EXG7", "EXG8", 'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet',
+                      'Temp', 'Status', 'UEOG', 'DEOG'])
     raw.rename_channels({'Po4': 'PO4'})
     raw.set_montage(montage)
     raw = raw.resample(250)
@@ -35,7 +39,7 @@ def preprocessing(filepath):
     raw = prep.fit().raw
     #raw = raw.notch_filter(np.arange(50, 101, 50), fir_design='firwin')
     raw = raw.filter(1, 60.)
-    ica = ICA(n_components=31, max_iter=50000, random_state=69, method='infomax')
+    ica = ICA(n_components=20, max_iter=50000, random_state=69, method='infomax')
     ica.fit(raw)
     ica.plot_components()
     dicts = label_components(raw, ica, method='iclabel')
