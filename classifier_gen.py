@@ -198,6 +198,6 @@ def EEGNet_seq(nb_classes, Chans=64, Samples=128,
         Activation('softmax', name='softmax')
     ])
 
-    optimizer = keras.optimizers.SGD(lr=learning_rate)
+    optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
     model.compile(loss=loss, optimizer=optimizer, metrics=["accuracy"])
     return model
