@@ -32,7 +32,7 @@ def get_data():
 def flatten(l):
     return [item for sublist in l for item in sublist]
 
-def split_timeseries(series, window_size=1000, overlap=100):
+def split_timeseries(series, window_size=10000, overlap=100):
     segments = []
     for i in range(0, series.shape[-1] - window_size + 1, window_size - overlap):
         segment = series[..., i:i + window_size]
@@ -55,7 +55,7 @@ def split_data(data, scores):
 X, Y = split_data(data, scores)
 
 def remove_nan(array,scores):
-    mask = np.isnan(array).any(axis=(1, 2, 3, 4))
+    mask = np.isnan(array).any(axis=(1, 2, 3))
     array = array[~mask]
     scores = scores[~mask]
     return array, scores
@@ -93,7 +93,7 @@ model.add(layers.Dense(32, activation='relu'))
 model.add(layers.Dense(1, activation='softmax'))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 # Fit the model
-model.fit(X_train, Y_train, epochs=60, batch_size=8, validation_split=0.1)
+model.fit(X_train, Y_train, epochs=600, batch_size=8, validation_split=0.1)
 # Save the model
 model.save('model2d.h5')
 # Evaluate the model

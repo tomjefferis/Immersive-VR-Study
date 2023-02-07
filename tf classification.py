@@ -10,20 +10,19 @@ from tensorflow.keras import layers
 def get_data():
     data = []
     scores = []
-    for file in os.listdir("../FreqData/"):
-        if file.endswith(".mat") and not file.endswith("resting.mat") and not file.endswith("hard.mat"):
-            filepath = "../FreqData/" + file
-            print(file)
-            #load mat file
-            raw = scipy.io.loadmat(filepath)
-            data.append(raw['temp'])
-            #get scores from file names, 1 = watching, 2 = normal, 3 = hard
-            if "watching" in file or "watch" in file:
-                scores.append(0)
-            elif "normal" in file or "correct" in file:
-                scores.append(1)
-            elif "hard" in file:
-                scores.append(2)
+    for file in [f for f in os.listdir("../FreqData/") if f.endswith(".mat") and not f.endswith("resting.mat") and not f.endswith("hard.mat")]:
+        filepath = "../FreqData/" + file
+        print(file)
+        #load mat file
+        raw = scipy.io.loadmat(filepath)
+        data.append(raw['temp'])
+        #get scores from file names, 1 = watching, 2 = normal, 3 = hard
+        if "watching" in file or "watch" in file:
+            scores.append(0)
+        elif "normal" in file or "correct" in file:
+            scores.append(1)
+        elif "hard" in file:
+            scores.append(2)
 
     return data, scores
 
@@ -43,12 +42,17 @@ def split_timeseries(series, window_size=1000, overlap=100):
 def split_data(data, scores):
     X = []
     Y = []
-    for i in range(len(data)):
-        x = split_timeseries(data[i])
-        X.append(x)
-        y = np.full((len(x),1), scores[i])
-        Y.append(y)
-    return flatten(X), flatten(Y)
+    # for i in range(len(data)):
+    #     x = split_timeseries(data[i])
+    #     X.append(x)
+    #     y = np.full((len(x),1), scores[i])
+    #     Y.append(y)
+    # return flatten(X), flatten(Y)
+    for x, y in zip(data, scores):
+        x = split_timeseries(x)
+        X.extend(x)
+        Y.extend([y]*len(x))
+    return X, Y
 
 
 X, Y = split_data(data, scores)
@@ -89,8 +93,8 @@ model.add(layers.Flatten())
 model.add(layers.Dense(128, activation='relu'))
 model.add(layers.Dropout(0.5))
 model.add(layers.Dense(32, activation='relu'))
-model.add(layers.Dense(1, activation='softmax'))
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+model.add(layers.Dense(2, activation='softmax'))
+model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 # Fit the model
 model.fit(X_train, Y_train, epochs=60, batch_size=8, validation_split=0.2)
 # Save the model
