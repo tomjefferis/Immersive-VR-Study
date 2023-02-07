@@ -4,6 +4,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 from sklearn import preprocessing
 import scipy.io
+from tensorflow.keras import layers
 
 #load data from ../EEG folder, all csv files
 def get_data():
@@ -65,49 +66,31 @@ for i in range(len(X)):
 #reshape data
 length = len(X)
 X = np.array(X)
-X = X.reshape(length, 32, 31, 1000)
+X = X.reshape(length, 1000, 32, 31, 1)
 Y = np.array(Y)
 #split data into train and test
 
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-n_classes = 2
+input_shape = (1000, 32, 31, 1)
 
-# Define the input layer
-inputs = tf.keras.layers.Input(shape=(32, 31, 1000))
-
-# Add 2D Convolutional layer
-conv2d_1 = tf.keras.layers.Conv2D(filters=64, kernel_size=(32, 1), strides=(1, 1), activation='relu')(inputs)
-
-# Add another 2D Convolutional layer
-conv2d_2 = tf.keras.layers.Conv2D(filters=32, kernel_size=(1, 20), strides=(1, 1), activation='relu')(conv2d_1)
-
-# Add 2D Max Pooling layer
-max_pool = tf.keras.layers.MaxPool2D(pool_size=(1, 1), strides=(1, 1))(conv2d_2)
-
-# Flatten the output of the 2D Max Pooling layer
-flatten = tf.keras.layers.Flatten()(max_pool)
-
-# Add a fully connected layer with ReLU activation
-fc = tf.keras.layers.Dense(units=128, activation='relu')(flatten)
-
-# Add the final output layer with softmax activation
-outputs = tf.keras.layers.Dense(units=n_classes, activation='softmax')(fc)
-
-# Define the model
-model = tf.keras.models.Model(inputs=inputs, outputs=outputs)
-
-# Compile the model
-model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-
+model = tf.keras.Sequential()
+model.add(layers.Conv3D(32, (3, 3, 3), activation='relu', input_shape=input_shape))
+model.add(layers.MaxPooling3D(pool_size=(2, 2, 2)))
+model.add(layers.Conv3D(64, (3, 3, 3), activation='relu'))
+model.add(layers.MaxPooling3D(pool_size=(2, 2, 2)))
+model.add(layers.Conv3D(128, (3, 3, 3), activation='relu'))
+model.add(layers.MaxPooling3D(pool_size=(2, 2, 2)))
+model.add(layers.Flatten())
+model.add(layers.Dense(128, activation='relu'))
+model.add(layers.Dense(2, activation='softmax'))
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 # Fit the model
-model.fit(X_train, Y_train, epochs=500, batch_size=64)
-
-# Evaluate the model
-model.evaluate(X_test, Y_test)
-
+model.fit(X_train, Y_train, epochs=500, batch_size=32)
 # Save the model
 model.save('model.h5')
+# Evaluate the model
+model.evaluate(X_test, Y_test)
 
 #plot confusion matrix and accuracy
 from sklearn.metrics import confusion_matrix
