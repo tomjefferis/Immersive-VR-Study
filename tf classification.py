@@ -65,13 +65,12 @@ X = np.array(X)
 X = X.reshape(length, 32, 31, 1000, 1)
 X = np.moveaxis(X, [3], [1])
 
-X -= np.min(X)
-X /= np.max(X)
-
 Y = np.array(Y)
 #remove nan values
 X, Y = remove_nan(X, Y)
 
+X -= np.min(X)
+X /= np.max(X)
 
 #split data into train and test
 
