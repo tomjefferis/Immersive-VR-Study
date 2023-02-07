@@ -19,11 +19,11 @@ def get_data():
             data.append(raw['temp'])
             #get scores from file names, 1 = watching, 2 = normal, 3 = hard
             if "watching" in file or "watch" in file:
-                scores.append(1)
+                scores.append(0)
             elif "normal" in file or "correct" in file:
-                scores.append(2)
+                scores.append(1)
             elif "hard" in file:
-                scores.append(3)
+                scores.append(2)
 
     return data, scores
 
@@ -53,21 +53,26 @@ def split_data(data, scores):
 
 X, Y = split_data(data, scores)
 
-def normalize(X):
-    mean = np.mean(X, axis=2)
-    std = np.std(X, axis=2)
-    X = (X - mean[None, :, :, None]) / std[None, :, :, None]
-    return X
-
-#normalize data
-for i in range(len(X)):
-    X[i] = normalize(X[i])
+def remove_nan(array,scores):
+    mask = np.isnan(array).any(axis=(1, 2, 3, 4))
+    array = array[~mask]
+    scores = scores[~mask]
+    return array, scores
 
 #reshape data
 length = len(X)
 X = np.array(X)
 X = X.reshape(length, 1000, 32, 31, 1)
+from sklearn.preprocessing import MinMaxScaler
+
+scaler = MinMaxScaler()
+A_normalized = scaler.fit_transform(X.reshape(-1, 1))
+X = A_normalized.reshape(length, 1000, 32, 31, 1)
 Y = np.array(Y)
+#remove nan values
+X, Y = remove_nan(X, Y)
+
+
 #split data into train and test
 
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
@@ -83,10 +88,12 @@ model.add(layers.Conv3D(128, (3, 3, 3), activation='relu'))
 model.add(layers.MaxPooling3D(pool_size=(2, 2, 2)))
 model.add(layers.Flatten())
 model.add(layers.Dense(128, activation='relu'))
-model.add(layers.Dense(2, activation='softmax'))
+model.add(layers.Dropout(0.5))
+model.add(layers.Dense(32, activation='relu'))
+model.add(layers.Dense(1, activation='softmax'))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 # Fit the model
-model.fit(X_train, Y_train, epochs=500, batch_size=32)
+model.fit(X_train, Y_train, epochs=60, batch_size=8, validation_split=0.2)
 # Save the model
 model.save('model.h5')
 # Evaluate the model
