@@ -62,12 +62,12 @@ def remove_nan(array,scores):
 #reshape data
 length = len(X)
 X = np.array(X)
-X = X.reshape(length, 1000, 32, 31, 1)
-from sklearn.preprocessing import MinMaxScaler
+X = X.reshape(length, 32, 31, 1000, 1)
+X = np.moveaxis(X, [3], [1])
 
-scaler = MinMaxScaler()
-A_normalized = scaler.fit_transform(X.reshape(-1, 1))
-X = A_normalized.reshape(length, 1000, 32, 31, 1)
+X -= np.min(X)
+X /= np.max(X)
+
 Y = np.array(Y)
 #remove nan values
 X, Y = remove_nan(X, Y)
