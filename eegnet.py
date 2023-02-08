@@ -10,16 +10,19 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.metrics import confusion_matrix
-from classifier_gen import EEGNet_seq
+from classifier_gen import EEGNet_seq, EEGNet_seq_attention
 
 
 #load data from ../EEG folder, all csv files
 def get_data():
     data = []
     scores = []
+    order = []
     for file in [f for f in os.listdir("../EEG/") if f.endswith(".fif") and not f.endswith("resting.fif") and not f.endswith("hard.fif")]:
         filepath = "../EEG/" + file
         print(file)
+        # get number from file name
+        order.append(int(file.split("_")[0]))
         #load raw file
         raw = mne.io.read_raw_fif(filepath, preload=True)
         #get data
@@ -32,10 +35,25 @@ def get_data():
         elif "hard" in file:
             scores.append(2)
 
-    return data, scores
+    return data, scores, order
 
-def flatten(l):
-    return [item for sublist in l for item in sublist]
+def remove_participant(data, scores, order, participant):
+    newdata = []
+    newscores = []
+    removed_participant = []
+    removed_scores = []
+
+    for x, y, z in zip(data, scores, order):
+        if z != participant:
+            newdata.append(x)
+            newscores.append(y)
+        else:
+            removed_participant.append(x)
+            removed_scores.append(y)
+            
+    return newdata, newscores, removed_participant, removed_scores
+
+
 
 def split_timeseries(series, window_size=1000, overlap=100):
     segments = []
@@ -45,24 +63,27 @@ def split_timeseries(series, window_size=1000, overlap=100):
     return segments
 
 #split data into 1000 sample sliding window with 100 sample overlap
-def split_data(data, scores, window_size=1000, overlap=100):
+def split_data(data, scores, order, window_size=1000, overlap=100):
     X = []
     Y = []
-    for x, y in zip(data, scores):
+    neworder = []
+    for x, y, z in zip(data, scores, order):
         x = split_timeseries(x, window_size, overlap)
         X.extend(x)
         Y.extend([y]*len(x))
-    return X, Y
+        neworder.extend([z]*len(x))
+    return X, Y, neworder
 
-def remove_nan(array,scores):
+def remove_nan(array,scores,order):
     mask = np.isnan(array).any(axis=(1, 2, 3))
     array = array[~mask]
     scores = scores[~mask]
-    return array, scores
+    order = order[~mask]
+    return array, scores, order
 
 window_size = 2500
 
-X, Y = get_data()
+X, Y, order = get_data()
 X, Y = split_data(X, Y, window_size=window_size)
 
 length = len(X)
@@ -78,7 +99,7 @@ X /= np.max(X)
 
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-model = EEGNet_seq(2, 32, window_size, loss='sparse_categorical_crossentropy', dropoutType='SpatialDropout2D', learning_rate=0.001)
+model = EEGNet_seq_attention(2, 32, window_size, loss='sparse_categorical_crossentropy', dropoutType='SpatialDropout2D', learning_rate=0.001)
 
 model.fit(X_train, Y_train, epochs=500, batch_size=32, validation_split=0.1)
 
