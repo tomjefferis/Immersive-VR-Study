@@ -5,12 +5,16 @@ import numpy as np
 from sklearn import preprocessing
 import scipy.io
 from tensorflow.keras import layers
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.metrics import confusion_matrix
 
 #load data from ../EEG folder, all csv files
 def get_data():
     data = []
     scores = []
-    for file in [f for f in os.listdir("../FreqData/") if f.endswith(".mat") and not f.endswith("resting.mat") and not f.endswith("hard.mat")]:
+    for file in [f for f in os.listdir("../FreqData/") if f.endswith(".mat") and not f.endswith("resting.mat")]: # and not f.endswith("hard.mat")]:
         filepath = "../FreqData/" + file
         print(file)
         #load mat file
@@ -93,33 +97,35 @@ model.add(layers.Flatten())
 model.add(layers.Dense(128, activation='relu'))
 model.add(layers.Dropout(0.5))
 model.add(layers.Dense(32, activation='relu'))
-model.add(layers.Dense(2, activation='softmax'))
+model.add(layers.Dense(3, activation='softmax'))
 model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 # Fit the model
-model.fit(X_train, Y_train, epochs=60, batch_size=8, validation_split=0.2)
+model.fit(X_train, Y_train, epochs=300, batch_size=8, validation_split=0.2)
 # Save the model
 model.save('model.h5')
 # Evaluate the model
 model.evaluate(X_test, Y_test)
 
-#plot confusion matrix and accuracy
-from sklearn.metrics import confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import accuracy_score
-
+#plot confusion matrix 
 Y_pred = model.predict(X_test)
-Y_pred_classes = np.argmax(Y_pred, axis=1)
-Y_true = Y_test
-confusion_mtx = confusion_matrix(Y_true, Y_pred_classes)
+Y_pred = np.argmax(Y_pred, axis=1)
+cm = confusion_matrix(Y_test, Y_pred)
 f, ax = plt.subplots(figsize=(8, 8))
-sns.heatmap(confusion_mtx, annot=True, linewidths=0.01, cmap="Greens", linecolor="gray", fmt= '.1f', ax=ax)
+sns.heatmap(cm, annot=True, linewidths=0.01, cmap="Greens", linecolor="gray", fmt= '.1f', ax=ax)
 plt.xlabel("Predicted Label")
 plt.ylabel("True Label")
 plt.title("Confusion Matrix")
 plt.show()
 
-print("Accuracy: ", accuracy_score(Y_true, Y_pred_classes))
+#plot loss graph
+plt.plot(model.history.history['loss'])
+plt.plot(model.history.history['val_loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
+
 
 
 

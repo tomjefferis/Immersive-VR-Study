@@ -17,7 +17,7 @@ from classifier_gen import EEGNet_seq
 def get_data():
     data = []
     scores = []
-    for file in [f for f in os.listdir("../EEG/") if f.endswith(".fif") and not f.endswith("resting.fif")]: # and not f.endswith("hard.fif")]:
+    for file in [f for f in os.listdir("../EEG/") if f.endswith(".fif") and not f.endswith("resting.fif") and not f.endswith("hard.fif")]:
         filepath = "../EEG/" + file
         print(file)
         #load raw file
@@ -78,12 +78,12 @@ X /= np.max(X)
 
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-model = EEGNet_seq(3, 32, window_size, loss='sparse_categorical_crossentropy', dropoutType='SpatialDropout2D', learning_rate=0.001)
+model = EEGNet_seq(2, 32, window_size, loss='sparse_categorical_crossentropy', dropoutType='SpatialDropout2D', learning_rate=0.001)
 
-model.fit(X_train, Y_train, epochs=1000, batch_size=32, validation_split=0.1)
+model.fit(X_train, Y_train, epochs=500, batch_size=32, validation_split=0.1)
 
 #save model
-model.save("eegnet.h5")
+model.save("eegnetbinary.h5")
 
 #evaluate model
 model.evaluate(X_test, Y_test)
