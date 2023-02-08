@@ -18,7 +18,7 @@ def get_data():
     data = []
     scores = []
     order = []
-    for file in [f for f in os.listdir("../EEG/") if f.endswith(".fif") and not f.endswith("resting.fif")]: # and not f.endswith("hard.fif")]:
+    for file in [f for f in os.listdir("../EEG/") if f.endswith(".fif") and not f.endswith("resting.fif") and not f.endswith("hard.fif")]:
         filepath = "../EEG/" + file
         print(file)
         # get number from file name
