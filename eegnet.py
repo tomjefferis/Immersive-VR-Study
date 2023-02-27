@@ -128,3 +128,5 @@ def remove_nan(array,scores,order):
 #plt.xlabel('epoch')
 #plt.legend(['train', 'test'], loc='upper left')
 #plt.show()
+
+

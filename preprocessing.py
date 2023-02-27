@@ -23,10 +23,14 @@ def preprocessing(filepath):
         raw.drop_channels(
             ch_names=['GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet',
                       'Temp', 'Status'])
-    else:
+    elif "A1" in raw.ch_names:
         raw.drop_channels(
             ch_names=["LEOG", "REOG", "A1", "A2", "EXG7", "EXG8", 'GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet',
                       'Temp', 'Status', 'UEOG', 'DEOG'])
+    else:
+        raw.drop_channels(
+            ch_names=['GSR1', 'GSR2', 'Erg1', 'Erg2', 'Resp', 'Plet',
+                      'Temp', 'Status'])
     raw.rename_channels({'Po4': 'PO4'})
     raw.set_montage(montage)
     raw = raw.resample(250)
@@ -41,9 +45,9 @@ def preprocessing(filepath):
     raw = raw.filter(1, 60.)
     ica = ICA(n_components=20, max_iter=50000, random_state=69, method='infomax')
     ica.fit(raw)
-    ica.plot_components()
+    #ica.plot_components()
     dicts = label_components(raw, ica, method='iclabel')
-    topo = plot_ica_components(ica)
+    #topo = plot_ica_components(ica)
     prob = dicts['y_pred_proba']
     labels = dicts['labels']
     # remove comonents labled eye or muscle with prob over 0.8
@@ -66,7 +70,7 @@ for file in os.listdir("../EEG/"):
         filenames.append(filepath)
             #x = raw.get_data()
             #np.savetxt('../EEG/' + file[:-4] + '.csv', x, delimiter=',')
-
+filenames = filenames[16:28]
     #result = pool.map(preprocessing, filenames)
 for file in filenames:
     preprocessing(file)
