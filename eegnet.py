@@ -10,10 +10,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.metrics import confusion_matrix
-from sklearn.preprocessing import OneHotEncoder
 
 
-#load data from ../EEG folder, all csv files
+# load data from ../EEG folder, all csv files
 def get_data():
     data = []
     scores = []
@@ -24,11 +23,11 @@ def get_data():
         print(file)
         # get number from file name
         order.append(int(file.split("_")[0]))
-        #load raw file
+        # load raw file
         raw = mne.io.read_raw_fif(filepath, preload=True)
-        #get data
-        data.append(raw.get_data()[:,7500:-15000])        
-        #get scores from file names, 1 = watching, 2 = normal, 3 = hard
+        # get data
+        data.append(raw.get_data()[:, 7500:-15000])
+        # get scores from file names, 1 = watching, 2 = normal, 3 = hard
         if "watching" in file or "watch" in file:
             scores.append(0)
         elif "normal" in file or "correct" in file:
@@ -37,6 +36,7 @@ def get_data():
             scores.append(2)
 
     return data, scores, order
+
 
 def remove_participant(data, scores, order, participant):
     newdata = []
@@ -51,8 +51,9 @@ def remove_participant(data, scores, order, participant):
         else:
             removed_participant.append(x)
             removed_scores.append(y)
-            
+
     return np.array(newdata), np.array(newscores), np.array(removed_participant), np.array(removed_scores)
+
 
 def split_timeseries(series, window_size=1000, overlap=100):
     segments = []
@@ -66,7 +67,8 @@ def split_timeseries(series, window_size=1000, overlap=100):
         segments.append(segment)
     return segments
 
-#split data into 1000 sample sliding window with 100 sample overlap
+
+# split data into 1000 sample sliding window with 100 sample overlap
 def split_data(data, scores, order, window_size=1000, overlap=100):
     X = []
     Y = []
@@ -74,12 +76,13 @@ def split_data(data, scores, order, window_size=1000, overlap=100):
     for x, y, z in zip(data, scores, order):
         x = split_timeseries(x, window_size, overlap)
         X.extend(x)
-        Y.extend([y]*len(x))
-        neworder.extend([z]*len(x))
+        Y.extend([y] * len(x))
+        neworder.extend([z] * len(x))
     return X, Y, neworder
 
-def remove_nan(data,scores,order):
-    # if series contains nan, remove it 
+
+def remove_nan(data, scores, order):
+    # if series contains nan, remove it
     newdata = []
     newscores = []
     neworder = []
@@ -92,9 +95,10 @@ def remove_nan(data,scores,order):
             neworder.append(z)
     return newdata, newscores, neworder
 
+
 # def model
 def model(input_shape, num_classes):
-    #CNN-BILSTM
+    # CNN-BILSTM
     model = tf.keras.Sequential()
     model.add(layers.Conv2D(16, (1, 125), strides=(1, 1), padding='same', input_shape=input_shape))
     model.add(layers.BatchNormalization())
@@ -114,39 +118,42 @@ def model(input_shape, num_classes):
 
 data, scores, order = get_data()
 n_participants = len(set(order))
-data, scores, order = split_data(data, scores, order, window_size=2500, overlap=250)
+data, scores, order = split_data(data, scores, order, window_size=1250, overlap=100)
 data, scores, order = remove_nan(data, scores, order)
 
 # one hot encode scores
-enc = OneHotEncoder(handle_unknown='ignore')
-scores = enc.fit_transform(np.array(scores).reshape(-1, 1)).toarray()
-
+scores = tf.one_hot(scores, depth=3)
 
 # use random participant as validation set
-participant = np.random.randint(1, n_participants+1)
+participant = np.random.randint(1, n_participants + 1)
 train_data, train_scores, test_data, test_scores = remove_participant(data, scores, order, participant)
 
 history = []
 
 # leave one out cross validation
 for i in range(n_participants):
-    train_datas, train_scoress, val_data, val_scores = remove_participant(train_data, train_scores, order, i+1)
+    train_datas, train_scoress, val_data, val_scores = remove_participant(train_data, train_scores, order, i + 1)
     # model
     models = model(input_shape=(train_data.shape[1], train_data.shape[2], 1), num_classes=3)
     models.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     hist = models.fit(train_datas, train_scoress, epochs=500, batch_size=32, validation_data=(val_data, val_scores))
     history.append(hist)
-    
 
 # print average accuracy and loss
 print("Average accuracy: ", np.mean([h.history['accuracy'] for h in history]))
 print("Average loss: ", np.mean([h.history['loss'] for h in history]))
 
-# save the best model 
-for h in history:
-    if h.history['val_accuracy'] == np.max([h.history['val_accuracy'] for h in history]):
-        best_model = h.model
-        break
+# evaluate all models on test set and save best model
+for i in range(n_participants):
+    models = history[i].model
+    models.evaluate(test_data, test_scores)
+    if i == 0:
+        best_model = models
+        best_acc = models.evaluate(test_data, test_scores)[1]
+    else:
+        if models.evaluate(test_data, test_scores)[1] > best_acc:
+            best_model = models
+            best_acc = models.evaluate(test_data, test_scores)[1]
 
 # save best model
 best_model.save("best_model_CNNBILSTM.h5")
