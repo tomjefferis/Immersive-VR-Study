@@ -10,9 +10,11 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import OneHotEncoder
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.models import load_model
 
-
-# load data from ../EEG folder, all csv files
+#load data from ../EEG folder, all csv files
 def get_data():
     data = []
     scores = []
@@ -26,7 +28,7 @@ def get_data():
         # load raw file
         raw = mne.io.read_raw_fif(filepath, preload=True)
         # get data
-        data.append(raw.get_data()[:, 7500:-15000])
+        data.append(raw.get_data(picks=['Fp1','Fp2'])[:, 7500:-15000])
         # get scores from file names, 1 = watching, 2 = normal, 3 = hard
         if "watching" in file or "watch" in file:
             scores.append(0)
@@ -100,15 +102,16 @@ def remove_nan(data, scores, order):
 def model(input_shape, num_classes):
     # CNN-BILSTM
     model = tf.keras.Sequential()
-    model.add(layers.Conv2D(16, (1, 125), strides=(1, 1), padding='same', input_shape=input_shape))
+    model.add(layers.Conv2D(32, (2, 1), strides=(1, 1), padding='same', input_shape=input_shape))
     model.add(layers.BatchNormalization())
     model.add(layers.Activation('relu'))
     model.add(layers.Conv2D(16, (2, 1), strides=(1, 1), padding='same'))
-    model.add(layers.BatchNormalization())
+    model.add(layers.BatchNormalization(momentum=0.9))
     model.add(layers.Activation('relu'))
-    model.add(layers.MaxPool2D((1, 4)))
     model.add(layers.TimeDistributed(layers.Flatten()))
+    model.add(layers.Dropout(0.5))
     model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=True)))
+    model.add(layers.Dropout(0.5))
     model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=False)))
     model.add(layers.Dense(32, activation='relu'))
     model.add(layers.Dense(num_classes, activation='softmax'))
@@ -116,44 +119,60 @@ def model(input_shape, num_classes):
     return model
 
 
+window_size = 1250
+channels = 2
+
+
 data, scores, order = get_data()
 n_participants = len(set(order))
-data, scores, order = split_data(data, scores, order, window_size=1250, overlap=100)
-data, scores, order = remove_nan(data, scores, order)
+data, scores, order = split_data(data, scores, order, window_size=window_size, overlap=100)
+#data, scores, order = remove_nan(data, scores, order)
 
-# one hot encode scores
-scores = tf.one_hot(scores, depth=3)
+scored = scores
+# one hot encode scores sklearn
+scores = preprocessing.OneHotEncoder().fit_transform(np.array(scores).reshape(-1, 1))
+scores = scores.toarray()
 
-# use random participant as validation set
-participant = np.random.randint(1, n_participants + 1)
-train_data, train_scores, test_data, test_scores = remove_participant(data, scores, order, participant)
+# use test train split inc order
+train_data, test_data, train_scores, test_scores, train_order, test_order = train_test_split(data, scores, order,test_size=0.2, random_state=42, shuffle=True)
 
+test_scores = test_scores.tolist()
 history = []
+early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=50)
+
+# define the checkpoint path and filename
+checkpoint_path = "best_model_CNNLSTM.h5"
+
+# define the ModelCheckpoint callback
+checkpoint = ModelCheckpoint(checkpoint_path, monitor='val_accuracy', verbose=1, save_best_only=True, mode='min')
+
+
 
 # leave one out cross validation
-for i in range(n_participants):
-    train_datas, train_scoress, val_data, val_scores = remove_participant(train_data, train_scores, order, i + 1)
+for i in range(2):
+    train_datas, train_scoress, val_data, val_scores = remove_participant(train_data, train_scores, train_order, i + 1)
     # model
-    models = model(input_shape=(train_data.shape[1], train_data.shape[2], 1), num_classes=3)
+    models = model((channels, window_size, 1), 3)
     models.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    hist = models.fit(train_datas, train_scoress, epochs=500, batch_size=32, validation_data=(val_data, val_scores))
+    hist = models.fit(train_datas, train_scoress, epochs=2, batch_size=32, validation_data=(val_data, val_scores),callbacks=[early_stop, checkpoint])
+    hist = load_model(checkpoint_path)
     history.append(hist)
 
-# print average accuracy and loss
-print("Average accuracy: ", np.mean([h.history['accuracy'] for h in history]))
-print("Average loss: ", np.mean([h.history['loss'] for h in history]))
 
 # evaluate all models on test set and save best model
-for i in range(n_participants):
-    models = history[i].model
-    models.evaluate(test_data, test_scores)
-    if i == 0:
-        best_model = models
-        best_acc = models.evaluate(test_data, test_scores)[1]
-    else:
-        if models.evaluate(test_data, test_scores)[1] > best_acc:
-            best_model = models
-            best_acc = models.evaluate(test_data, test_scores)[1]
+best_model = None
+best_acc = 0
+# change test_scores to list instead of array
+
+
+for i, model in enumerate(history):
+    # evaluate model on test set
+    _, acc = model.evaluate(test_data, test_scores, verbose=0)
+    print('Model %d: %.3f' % (i + 1, acc))
+    # check if best model
+    if acc > best_acc:
+        best_acc = acc
+        best_model = model
 
 # save best model
 best_model.save("best_model_CNNBILSTM.h5")
