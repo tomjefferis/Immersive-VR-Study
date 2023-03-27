@@ -6,11 +6,6 @@ from sklearn import preprocessing
 import scipy.io
 from tensorflow.keras import layers
 import mne
-import seaborn as sns
-import matplotlib.pyplot as plt
-import pandas as pd
-from sklearn.metrics import confusion_matrix
-from sklearn.preprocessing import OneHotEncoder
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.models import load_model
 
@@ -20,7 +15,7 @@ def get_data():
     scores = []
     order = []
     filedir = '../EEG'
-    for file in [f for f in os.listdir(filedir) if f.endswith(".fif") and not f.endswith("resting.fif")]:
+    for file in [f for f in os.listdir(filedir) if f.endswith(".fif") and not f.endswith("resting.fif") and not f.endswith("hard.fif")]:
         filepath = filedir + "/" + file
         print(file)
         # get number from file name
@@ -128,15 +123,15 @@ n_participants = len(set(order))
 data, scores, order = split_data(data, scores, order, window_size=window_size, overlap=100)
 #data, scores, order = remove_nan(data, scores, order)
 
-scored = scores
+#scored = scores
 # one hot encode scores sklearn
-scores = preprocessing.OneHotEncoder().fit_transform(np.array(scores).reshape(-1, 1))
-scores = scores.toarray()
+#scores = preprocessing.OneHotEncoder().fit_transform(np.array(scores).reshape(-1, 1))
+#scores = scores.toarray()
 
 # use test train split inc order
 train_data, test_data, train_scores, test_scores, train_order, test_order = train_test_split(data, scores, order,test_size=0.2, random_state=42, shuffle=True)
 
-test_scores = test_scores.tolist()
+#test_scores = test_scores.tolist()
 history = []
 early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=50)
 
@@ -152,7 +147,7 @@ checkpoint = ModelCheckpoint(checkpoint_path, monitor='val_accuracy', verbose=1,
 for i in range(2):
     train_datas, train_scoress, val_data, val_scores = remove_participant(train_data, train_scores, train_order, i + 1)
     # model
-    models = model((channels, window_size, 1), 3)
+    models = model((channels, window_size, 1), 2)
     models.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     hist = models.fit(train_datas, train_scoress, epochs=2, batch_size=32, validation_data=(val_data, val_scores),callbacks=[early_stop, checkpoint])
     hist = load_model(checkpoint_path)
