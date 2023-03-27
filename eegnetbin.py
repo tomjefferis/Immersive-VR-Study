@@ -10,24 +10,23 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.metrics import confusion_matrix
+from classifier_gen import EEGNet_seq, EEGNet_seq_attention
 from sklearn.preprocessing import OneHotEncoder
-
 
 #load data from ../EEG folder, all csv files
 def get_data():
     data = []
     scores = []
     order = []
-    filedir = '../EEG'
-    for file in [f for f in os.listdir(filedir) if f.endswith(".fif") and not f.endswith("resting.fif")]:
-        filepath = filedir + "/" + file
+    for file in [f for f in os.listdir("../EEG/") if f.endswith(".fif") and not f.endswith("resting.fif")]:
+        filepath = "../EEG/" + file
         print(file)
         # get number from file name
         order.append(int(file.split("_")[0]))
         #load raw file
         raw = mne.io.read_raw_fif(filepath, preload=True)
-        #get data
-        data.append(raw.get_data()[:,7500:-15000])        
+        #get data from fp1 & fp2
+        data.append(raw.get_data(picks=["Fp1", "Fp2"])[:, 7500:-15000])
         #get scores from file names, 1 = watching, 2 = normal, 3 = hard
         if "watching" in file or "watch" in file:
             scores.append(0)
@@ -58,10 +57,10 @@ def split_timeseries(series, window_size=1000, overlap=100):
     segments = []
     for i in range(0, series.shape[-1] - window_size + 1, window_size - overlap):
         segment = series[..., i:i + window_size]
-        # add extra dimension for channel
         x_max = np.max(segment)
         x_avg = np.mean(segment)
         segment = (segment - x_avg) / x_max
+        # add extra dimension for channel
         segment = np.expand_dims(segment, axis=-1)
         segments.append(segment)
     return segments
@@ -92,26 +91,6 @@ def remove_nan(data,scores,order):
             neworder.append(z)
     return newdata, newscores, neworder
 
-# def model
-def model(input_shape, num_classes):
-    #CNN-BILSTM
-    model = tf.keras.Sequential()
-    model.add(layers.Conv2D(16, (1, 125), strides=(1, 1), padding='same', input_shape=input_shape))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Activation('relu'))
-    model.add(layers.Conv2D(16, (2, 1), strides=(1, 1), padding='same'))
-    model.add(layers.BatchNormalization())
-    model.add(layers.Activation('relu'))
-    model.add(layers.MaxPool2D((1, 4)))
-    model.add(layers.TimeDistributed(layers.Flatten()))
-    model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=True)))
-    model.add(layers.Bidirectional(layers.LSTM(64, return_sequences=False)))
-    model.add(layers.Dense(32, activation='relu'))
-    model.add(layers.Dense(num_classes, activation='softmax'))
-
-    return model
-
-
 data, scores, order = get_data()
 n_participants = len(set(order))
 data, scores, order = split_data(data, scores, order, window_size=2500, overlap=250)
@@ -130,11 +109,11 @@ history = []
 
 # leave one out cross validation
 for i in range(n_participants):
-    train_datas, train_scoress, val_data, val_scores = remove_participant(train_data, train_scores, order, i+1)
+    train_data, train_scores, val_data, val_scores = remove_participant(train_data, train_scores, order, i+1)
     # model
-    models = model(input_shape=(train_data.shape[1], train_data.shape[2], 1), num_classes=3)
-    models.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    hist = models.fit(train_datas, train_scoress, epochs=500, batch_size=32, validation_data=(val_data, val_scores))
+    model= EEGNet_seq(3, Chans=2, Samples=2500, dropoutRate=0.5, kernLength=64, F1=8, D=2, F2=16, norm_rate=0.25, dropoutType='Dropout')
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    hist = model.fit(train_data, train_scores, epochs=500, batch_size=32, validation_data=(val_data, val_scores))
     history.append(hist)
     
 
@@ -150,3 +129,10 @@ for h in history:
 
 # save best model
 best_model.save("best_model_CNNBILSTM.h5")
+
+
+
+
+
+
+
