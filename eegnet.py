@@ -15,7 +15,7 @@ def get_data():
     scores = []
     order = []
     filedir = '../EEG'
-    for file in [f for f in os.listdir(filedir) if f.endswith(".fif") and not f.endswith("resting.fif") and not f.endswith("hard.fif")]:
+    for file in [f for f in os.listdir(filedir) if f.endswith(".fif") and not f.endswith("resting.fif")]:
         filepath = filedir + "/" + file
         print(file)
         # get number from file name
@@ -114,7 +114,7 @@ def model(input_shape, num_classes):
     return model
 
 
-window_size = 1250
+window_size = 2500
 channels = 2
 
 
@@ -125,15 +125,16 @@ data, scores, order = split_data(data, scores, order, window_size=window_size, o
 
 #scored = scores
 # one hot encode scores sklearn
-#scores = preprocessing.OneHotEncoder().fit_transform(np.array(scores).reshape(-1, 1))
-#scores = scores.toarray()
+scores = preprocessing.OneHotEncoder().fit_transform(np.array(scores).reshape(-1, 1))
+scores = scores.toarray()
 
 # use test train split inc order
 train_data, test_data, train_scores, test_scores, train_order, test_order = train_test_split(data, scores, order,test_size=0.2, random_state=42, shuffle=True)
-
+# test data into array
+test_data = np.array(test_data)
 #test_scores = test_scores.tolist()
 history = []
-early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=50)
+early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=100)
 
 # define the checkpoint path and filename
 checkpoint_path = "best_model_CNNLSTM.h5"
@@ -144,12 +145,12 @@ checkpoint = ModelCheckpoint(checkpoint_path, monitor='val_accuracy', verbose=1,
 
 
 # leave one out cross validation
-for i in range(2):
+for i in range(n_participants):
     train_datas, train_scoress, val_data, val_scores = remove_participant(train_data, train_scores, train_order, i + 1)
     # model
-    models = model((channels, window_size, 1), 2)
+    models = model((channels, window_size, 1), num_classes=3)
     models.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-    hist = models.fit(train_datas, train_scoress, epochs=2, batch_size=32, validation_data=(val_data, val_scores),callbacks=[early_stop, checkpoint])
+    hist = models.fit(train_datas, train_scoress, epochs=500, batch_size=128, validation_data=(val_data, val_scores),callbacks=[early_stop, checkpoint])
     hist = load_model(checkpoint_path)
     history.append(hist)
 

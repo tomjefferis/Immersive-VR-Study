@@ -150,7 +150,7 @@ for i in range(2):
     # model
     models = model((channels, window_size, 1), 2)
     models.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    hist = models.fit(train_datas, train_scoress, epochs=5, batch_size=128, validation_data=(val_data, val_scores),callbacks=[early_stop, checkpoint])
+    hist = models.fit(train_datas, train_scoress, epochs=5, batch_size=512, validation_data=(val_data, val_scores),callbacks=[early_stop, checkpoint])
     hist = load_model(checkpoint_path)
     history.append(hist)
 
